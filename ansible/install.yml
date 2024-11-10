@@ -1,0 +1,7 @@
+---
+- name: Microk8s Cluster Install
+  hosts: all
+  become: true
+  roles:
+    - microk8s-init
+
