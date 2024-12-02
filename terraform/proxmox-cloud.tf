@@ -1,14 +1,14 @@
 resource "proxmox_vm_qemu" "cloud-microk8s-master" {
     target_node = "homelab"
     desc = "Cloud Ubuntu 22.04"
-    count = 3
+    count = 2
     onboot = true
 
     clone = "ubuntu-cloud"
     agent = 0
 
     os_type = "cloud-init"
-    cores = 1
+    cores = 2
     sockets = 1
     vcpus = 0
     cpu = "host"
