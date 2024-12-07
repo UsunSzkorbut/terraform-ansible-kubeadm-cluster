@@ -1,10 +1,10 @@
-resource "proxmox_vm_qemu" "cloud-microk8s-master" {
-    target_node = "homelab"
+resource "proxmox_vm_qemu" "kubeadm-master" {
+    target_node = "proxn1"
     desc = "Cloud Ubuntu 22.04"
-    count = 2
+    count = 1
     onboot = true
 
-    clone = "ubuntu-cloud"
+    clone = "ubuntu-cloud-2204"
     agent = 0
 
     os_type = "cloud-init"
@@ -13,7 +13,7 @@ resource "proxmox_vm_qemu" "cloud-microk8s-master" {
     vcpus = 0
     cpu = "host"
     memory = 8192
-    name = "microk8s-master-0${count.index + 1}"
+    name = "k8s-cp-0${count.index + 1}"
 
     scsihw   = "virtio-scsi-single"
     bootdisk = "scsi0"
@@ -23,7 +23,7 @@ resource "proxmox_vm_qemu" "cloud-microk8s-master" {
                 disk {
                   storage = "local-lvm"
                   emulatessd = true
-                  size = 50
+                  size = 100
                 }
             }
         }
@@ -43,22 +43,22 @@ resource "proxmox_vm_qemu" "cloud-microk8s-master" {
     ipconfig0 = "ip=10.0.0.1${count.index + 1}/24,gw=10.0.0.1"
 }
 
-resource "proxmox_vm_qemu" "cloud-microk8s-worker" {
-    target_node = "homelab"
+resource "proxmox_vm_qemu" "kubeadm-worker" {
+    target_node = "proxn1"
     desc = "Cloud Ubuntu 22.04"
     count = 1
     onboot = true
 
-    clone = "ubuntu-cloud"
+    clone = "ubuntu-cloud-2204"
     agent = 0
 
     os_type = "cloud-init"
-    cores = 1
+    cores = 2
     sockets = 1
     vcpus = 0
     cpu = "host"
     memory = 8192
-    name = "microk8s-worker-0${count.index + 1}"
+    name = "k8s-worker-0${count.index + 1}"
 
     scsihw   = "virtio-scsi-single"
     bootdisk = "scsi0"
@@ -68,7 +68,7 @@ resource "proxmox_vm_qemu" "cloud-microk8s-worker" {
                 disk {
                   storage = "local-lvm"
                   emulatessd = true
-                  size = 150
+                  size = 100
                 }
             }
         }
