@@ -1,2 +1,2 @@
-# terraform-ansible-microk8s-cluster
-MicroK8 cluster with pre-installed components
+# terraform-ansible-kubeadm-cluster
+Kubeadm cluster with pre-installed components
