@@ -49,7 +49,7 @@ resource "proxmox_vm_qemu" "kubeadm-worker" {
     count = 1
     onboot = true
 
-    clone = "ubuntu-cloud-2204"
+    clone = "ubuntu-cloud-2404"
     agent = 0
 
     os_type = "cloud-init"
