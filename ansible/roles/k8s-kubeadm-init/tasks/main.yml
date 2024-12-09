@@ -32,16 +32,19 @@
     group: root
     mode: '0644'
 
-- name: Load kernel modules for K8s
-  community.general.modprobe:
-    name:
-      - overlay
-      - br_netfilter
+- name: Load kernel modules for K8s - overlay
+  ansible.builtin.modprobe:
+    name: overlay
+    state: present
+
+- name: Load kernel modules for K8s - br_netfilter
+  ansible.builtin.modprobe:
+    name: br_netfilter
     state: present
 
 - name: Copy kernel parameters configuration file
   ansible.builtin.template:
-    src: kubernetes.conf.j2
+    src: 10-kubernetes.conf.j2
     dest: /etc/sysctl.d/10-kubernetes.conf
     owner: root
     group: root
@@ -65,17 +68,17 @@
     state: directory
     mode: '0755'
 
-- name: Download Docker ASC file for the keyring
+- name: Download Docker GPG file for the keyring
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /tmp/docker.asc
+    dest: /tmp/docker
     checksum: sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
 
 - name: De-armor Docker GPG key
   ansible.builtin.command:
-    cmd: gpg --dearmor < /tmp/docker.asc > /etc/apt/keyrings/docker.gpg
-  changed_when: false
-  no_log: true
+    cmd: gpg --dearmor /tmp/docker > /etc/apt/keyrings/docker.gpg
+TODO
+
 
 - name: Add Docker's repository to APT sources list
   ansible.builtin.deb822_repository:
