@@ -1,71 +1,175 @@
 ---
-apt install curl apt-transport-https git wget software-properties-common lsb-release ca-certificates socat -y
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - apt-transport-https
+      - git
+      - wget
+      - software-properties-common
+      #- lsb-release # DEPRECATED --> see containerd tasks
+      - ca-certificates
+      - socat
+    state: present
+  register: reg_apt_install
+  until: reg_apt_install is succeeded
+  retries: 5
+  delay: 30
 
-systemctl disable ufw
-systemctl stop ufw
+- name: Disable and stop UFW firewall service
+  ansible.builtin.systemd_service:
+    name: ufw
+    enabled: false
+    state: 'stopped'
 
-cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
-overlay
-br_netfilter
-EOF
+- name: Add persistent configuration file for kernel modules
+  ansible.builtin.copy:
+    content: |
+      overlay
+      br_netfilter
+    dest: /etc/modules-load.d/k8s.conf
+    owner: root
+    group: root
+    mode: '0644'
 
-sudo modprobe overlay
-sudo modprobe br_netfilter
+- name: Load kernel modules for K8s
+  community.general.modprobe:
+    name:
+      - overlay
+      - br_netfilter
+    state: present
 
-cat <<EOF | sudo tee /etc/sysctl.d/kubernetes.conf
-net.ipv4.ip_forward = 1
-net.ipv4.conf.all.forwarding = 1
-net.ipv6.conf.all.forwarding = 1
-net.bridge.bridge-nf-call-iptables  = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-net.ipv4.conf.all.rp_filter = 0
-net.ipv6.conf.all.rp_filter = 0
-EOF
+- name: Copy kernel parameters configuration file
+  ansible.builtin.template:
+    src: kubernetes.conf.j2
+    dest: /etc/sysctl.d/10-kubernetes.conf
+    owner: root
+    group: root
+    mode: '0644'
 
-sysctl --system
+- name: Get kernel parameters and apply them at runtime
+  ansible.builtin.sysctl:
+     name: '{{ item.key }}'
+     value: '{{ item.value }}'
+     state: present
+     sysctl_set: true
+     reload: yes
+     sysctl_file: /etc/sysctl.d/10-kubernetes.conf
+  with_dict: '{{ sysctl_config }}'
 
-# CONTAINERD:
-mkdir -p /etc/apt/keyrings
+# TODO move tasks related to Containerd installation to the beginning,
+#      to aggregate APT installation process into a single task
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    name: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+- name: Download Docker ASC file for the keyring
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /tmp/docker.asc
+    checksum: sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update &&  apt-get install containerd.io -y
+- name: De-armor Docker GPG key
+  ansible.builtin.command:
+    cmd: gpg --dearmor < /tmp/docker.asc > /etc/apt/keyrings/docker.gpg
+  changed_when: false
+  no_log: true
 
-containerd config default | tee /etc/containerd/config.toml
+- name: Add Docker's repository to APT sources list
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    architectures: '{{ ansible_architecture }}'
+    signed_by: /etc/apt/keyrings/docker.gpg
+    uris: https://download.docker.com/linux/ubuntu
+    suites: '{{ ansible_lsb.codename }}'
+    components: stable
+    trusted: true
+    enabled: true
 
-sed -e 's/SystemdCgroup = false/SystemdCgroup = true/g' -i /etc/containerd/config.toml
+- name: Install Containerd
+  ansible.builtin.apt:
+    name: containerd.io
+    state: present
+    update_cache: yes
 
-systemctl enable --now containerd
-systemctl restart containerd
+# TODO check applicability for modules to replace 'command'
+- name: Create default Containerd config
+  ansible.builtin.command:
+    cmd: containerd config default | tee /etc/containerd/config.toml
+    creates: /etc/containerd/config.toml
 
-# Kubernetes: 
-mkdir -p -m 755 /etc/apt/keyrings
+- name: Set SystemdCgroup to true for Containerd
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^SystemdCgroup = false'
+    line: SystemdCgroup = true
 
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+- name: Enable and restart Containerd service
+  ansible.builtin.systemd_service:
+    name: containerd
+    enabled: true
+    state: 'restarted'
 
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
+# TODO move tasks related to Kubernetes installation to the beginning,
+#      to aggregate APT installation process into a single task
+- name: Download Kubernetes ASC file for the keyring
+  ansible.builtin.get_url:
+    url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+    dest: /tmp/kubernetes-apt-keyring.asc
+    checksum: sha256:7627818cf7bae52f9008c93e8b1f961f53dea11d40891778de216fb1b43be54d
 
+- name: De-armor Docker GPG key
+  ansible.builtin.command:
+    cmd: gpg --dearmor < /tmp/kubernetes-apt-keyring.asc > /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    changed_when: false
+    no_log: true
 
-#Run only on Control-Node
-kubeadm config images pull
+- name: Add Docker's repository to APT sources list
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: deb
+    signed_by: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    uris: https://pkgs.k8s.io/core:/stable:/v1.31/deb/
+    components: /
+    trusted: true
+    enabled: true
 
-kubeadm init --config=kubeadm-config.yaml --upload-certs
+- name: Install K8s packages
+  ansible.builtin.apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    update_cache: yes
 
-# Post install
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
+- name: Mark K8s packages to prevent upgrades
+  ansible.builtin.dpkg_selections:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    selection: hold
 
-## For root:
-export KUBECONFIG=/etc/kubernetes/admin.conf
-
-# HELM
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-# Install bash-completion 
-source <(kubectl completion bash)
-echo "source <(kubectl completion bash)" >> $HOME/.bashrc
+##Run only on Control-Node
+#kubeadm config images pull
+#
+#kubeadm init --config=kubeadm-config.yaml --upload-certs
+#
+## Post install
+#mkdir -p $HOME/.kube
+#sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+#sudo chown $(id -u):$(id -g) $HOME/.kube/config
+#
+### For root:
+#export KUBECONFIG=/etc/kubernetes/admin.conf
+#
+## HELM
+#curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+#
+## Install bash-completion
+#source <(kubectl completion bash)
+#echo "source <(kubectl completion bash)" >> $HOME/.bashrc
