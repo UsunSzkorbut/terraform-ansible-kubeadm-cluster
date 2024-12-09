@@ -1,4 +1,5 @@
 ---
+# TODO check unused packages and remove them
 - name: Install required packages
   ansible.builtin.apt:
     name:
@@ -20,7 +21,7 @@
   ansible.builtin.systemd_service:
     name: ufw
     enabled: false
-    state: 'stopped'
+    state: stopped
 
 - name: Add persistent configuration file for kernel modules
   ansible.builtin.copy:
@@ -33,12 +34,12 @@
     mode: '0644'
 
 - name: Load kernel modules for K8s - overlay
-  ansible.builtin.modprobe:
+  community.general.modprobe:
     name: overlay
     state: present
 
 - name: Load kernel modules for K8s - br_netfilter
-  ansible.builtin.modprobe:
+  community.general.modprobe:
     name: br_netfilter
     state: present
 
@@ -71,14 +72,13 @@
 - name: Download Docker GPG file for the keyring
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /tmp/docker
+    dest: /tmp/docker.asc
     checksum: sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
 
 - name: De-armor Docker GPG key
-  ansible.builtin.command:
-    cmd: gpg --dearmor /tmp/docker > /etc/apt/keyrings/docker.gpg
-TODO
-
+  ansible.builtin.shell: gpg --dearmor < /tmp/docker.asc > /etc/apt/keyrings/docker.gpg
+  changed_when: false
+  no_log: true
 
 - name: Add Docker's repository to APT sources list
   ansible.builtin.deb822_repository:
@@ -100,8 +100,8 @@ TODO
 
 # TODO check applicability for modules to replace 'command'
 - name: Create default Containerd config
-  ansible.builtin.command:
-    cmd: containerd config default | tee /etc/containerd/config.toml
+  ansible.builtin.shell: containerd config default | tee /etc/containerd/config.toml
+  args:
     creates: /etc/containerd/config.toml
 
 - name: Set SystemdCgroup to true for Containerd
@@ -114,21 +114,20 @@ TODO
   ansible.builtin.systemd_service:
     name: containerd
     enabled: true
-    state: 'restarted'
+    state: restarted
 
 # TODO move tasks related to Kubernetes installation to the beginning,
 #      to aggregate APT installation process into a single task
 - name: Download Kubernetes ASC file for the keyring
   ansible.builtin.get_url:
     url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
-    dest: /tmp/kubernetes-apt-keyring.asc
+    dest: /tmp/kubernetes.asc
     checksum: sha256:7627818cf7bae52f9008c93e8b1f961f53dea11d40891778de216fb1b43be54d
 
 - name: De-armor Docker GPG key
-  ansible.builtin.command:
-    cmd: gpg --dearmor < /tmp/kubernetes-apt-keyring.asc > /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-    changed_when: false
-    no_log: true
+  ansible.builtin.shell: gpg --dearmor < /tmp/kubernetes.asc > /etc/apt/keyrings/kubernetes.gpg
+  changed_when: false
+  no_log: true
 
 - name: Add Docker's repository to APT sources list
   ansible.builtin.deb822_repository:
