@@ -1,7 +1,7 @@
 ---
-- name: Microk8s Cluster Install
+- name: Kubeadm Cluster Install
   hosts: all
   become: true
   roles:
-    - k8s-kubeadm-init
+    - k8s-kubeadm-prereq
 
