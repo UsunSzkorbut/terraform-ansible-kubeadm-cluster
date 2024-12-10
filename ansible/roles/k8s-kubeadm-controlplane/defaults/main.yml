@@ -1,3 +1,4 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# defaults file for k8s-kubeadm-controlplane
+cluster:
+  config: "{{ tmp_dir }}/kubeadm-config.yaml"

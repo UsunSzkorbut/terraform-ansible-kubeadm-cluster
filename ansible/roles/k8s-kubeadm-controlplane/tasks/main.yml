@@ -1,3 +1,25 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# tasks file for k8s-kubeadm-controlplane
+- name: K8s Kubeadm Control Plane | Pull k8s images
+  ansible.builtin.shell: kubeadm config images pull
+  args:
+    executable: /bin/bash
+
+##Run only on Control-Node
+#ć
+#
+#kubeadm init --config=kubeadm-config.yaml --upload-certs
+#
+## Post install
+#mkdir -p $HOME/.kube
+#sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+#sudo chown $(id -u):$(id -g) $HOME/.kube/config
+#
+### For root:
+#export KUBECONFIG=/etc/kubernetes/admin.conf
+#
+## HELM
+#curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+#
+## Install bash-completion
+#source <(kubectl completion bash)
+#echo "source <(kubectl completion bash)" >> $HOME/.bashrc

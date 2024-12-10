@@ -1,7 +1,12 @@
 ---
-- name: Kubeadm Cluster Install
+- name: Kubeadm Cluster Install | Prerequisites
   hosts: all
   become: true
   roles:
     - k8s-kubeadm-prereq
 
+- name: Kubeadm Cluster Install | Init Control Plane
+  hosts: control
+  become: true
+  roles:
+    - k8s-kubeadm-controlplane
