@@ -4,11 +4,12 @@
   args:
     executable: /bin/bash
 
-##Run only on Control-Node
-#ć
-#
+
+# TODO: Add the following to the kubeadm-config.yaml as a template file
 #kubeadm init --config=kubeadm-config.yaml --upload-certs
-#
+
+
+
 ## Post install
 #mkdir -p $HOME/.kube
 #sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config

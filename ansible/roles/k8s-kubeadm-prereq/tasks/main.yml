@@ -144,23 +144,3 @@
   ansible.builtin.dpkg_selections:
     name: kubectl
     selection: hold
-
-##Run only on Control-Node
-#kubeadm config images pull
-#
-#kubeadm init --config=kubeadm-config.yaml --upload-certs
-#
-## Post install
-#mkdir -p $HOME/.kube
-#sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-#sudo chown $(id -u):$(id -g) $HOME/.kube/config
-#
-### For root:
-#export KUBECONFIG=/etc/kubernetes/admin.conf
-#
-## HELM
-#curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-#
-## Install bash-completion
-#source <(kubectl completion bash)
-#echo "source <(kubectl completion bash)" >> $HOME/.bashrc
