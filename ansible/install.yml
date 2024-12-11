@@ -6,7 +6,13 @@
     - k8s-kubeadm-prereq
 
 - name: Kubeadm Cluster Install | Init Control Plane
-  hosts: control
+  hosts: control[0]
   become: true
   roles:
     - k8s-kubeadm-controlplane
+
+- name: Kubeadm Worker Node | Join Control Plane
+  hosts: all
+  become: true
+  roles:
+    - k8s-kubeadm-worker
