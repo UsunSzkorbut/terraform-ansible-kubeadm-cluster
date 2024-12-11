@@ -5,14 +5,26 @@
   roles:
     - k8s-kubeadm-prereq
 
-- name: Kubeadm Cluster Install | Init Control Plane
+- name: Kubeadm Cluster Install | Control Plane First Init
   hosts: control[0]
   become: true
   roles:
-    - k8s-kubeadm-controlplane
+    - k8s-kubeadm-cp-init
 
-- name: Kubeadm Worker Node | Join Control Plane
+- name: Kubeadm Worker Node | Join Cluster 
   hosts: all
   become: true
   roles:
-    - k8s-kubeadm-worker
+    - k8s-kubeadm-worker-join
+
+# - name: Kubeadm Control Plane Node | Join Cluster 
+#   hosts: control
+#   become: true
+#   roles:
+#     - k8s-kubeadm-control-join
+
+# - name: Kubeadm Cluster Components | Install cluster
+#   hosts: control[0]
+#   become: true
+#   roles:
+#     - k8s-kubeadm-cluster-components
