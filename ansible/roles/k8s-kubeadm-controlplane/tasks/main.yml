@@ -4,23 +4,43 @@
   args:
     executable: /bin/bash
 
+# TODO does Kubeadm have a config validation tool?
+- name: Add Kubeadm configuration file
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: /tmp/kubeadm-config.yaml
 
-# TODO: Add the following to the kubeadm-config.yaml as a template file
-#kubeadm init --config=kubeadm-config.yaml --upload-certs
+- name: Initialize Kubeadm Control Plane
+  ansible.builtin.shell: kubeadm init --config=/tmp/kubeadm-config.yaml --upload-certs
 
+# TODO use ansible variables to get $HOME path instead of hardcoded
+- name: Create Kube directory
+  ansible.builtin.file:
+    path: ~/.kube
+    state: directory
 
+# TODO use ansible variables. Check if export worked
+- name: Copy admin.conf to Kube directory
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: ~/.kube/config
+    remote_src: true
+    owner: root
+    group: root
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
 
-## Post install
-#mkdir -p $HOME/.kube
-#sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-#sudo chown $(id -u):$(id -g) $HOME/.kube/config
-#
-### For root:
-#export KUBECONFIG=/etc/kubernetes/admin.conf
-#
+# TODO download script on Ansible controller and execute via ansible.builtin.script
+#      instead of running remotely?
 ## HELM
 #curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 #
-## Install bash-completion
-#source <(kubectl completion bash)
-#echo "source <(kubectl completion bash)" >> $HOME/.bashrc
+
+- name: Source kubectl completion for Bash shell
+  ansible.builtin.shell: source <(kubectl completion bash)
+
+- name: Install Helm | Add /usr/local/bin to PATH
+  ansible.builtin.lineinfile:
+    path: ~/.bashrc
+    line: 'source <(kubectl completion bash)'
+    state: present
