@@ -27,7 +27,7 @@
   - name: K8s PreReq | Docker repository | Add Docker's repository to APT sources list
     ansible.builtin.apt_repository:
       repo: >
-        deb [arch={{ ansible_architecture }}
+        deb [arch=amd64
         signed-by=/etc/apt/keyrings/docker.gpg]
         https://download.docker.com/linux/ubuntu
         {{ ansible_lsb.codename }}
@@ -51,7 +51,7 @@
   - name: K8s PreReq | Kubernetes repository | Add Kubernetes repository to APT sources list
     ansible.builtin.apt_repository:
       repo: >
-        deb [arch={{ ansible_architecture }}
+        deb [arch=amd64
         signed-by=/etc/apt/keyrings/kubernetes.gpg]
         https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/
         /
