@@ -1,21 +1,99 @@
 ---
-# TODO create list of packages as a variable
+- name: K8s PreReq | Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    name: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: K8s PreReq | Create temporary file for GPG keys
+  ansible.builtin.tempfile:
+    state: file
+    suffix: k8s_prereq
+  register: tempfile
+
+- name: K8s PreReq | Docker repository
+  block:
+  - name: K8s PreReq | Docker repository | Download Docker GPG file for the keyring
+    ansible.builtin.get_url:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      dest: '{{ tempfile.path }}'
+      checksum: sha256:{{ checksums.docker }}
+
+  - name: K8s PreReq | Docker repository | De-armor Docker GPG key
+    ansible.builtin.shell: gpg --dearmor < {{ tempfile.path }} > /etc/apt/keyrings/docker.gpg
+    changed_when: false
+    no_log: true
+
+  - name: K8s PreReq | Docker repository | Add Docker's repository to APT sources list
+    ansible.builtin.apt_repository:
+      repo: >
+        deb [arch={{ ansible_architecture }}
+        signed-by=/etc/apt/keyrings/docker.gpg]
+        https://download.docker.com/linux/ubuntu
+        {{ ansible_lsb.codename }}
+        stable
+      state: present
+  when: tempfile.path is defined
+
+- name: K8s PreReq | Kubernetes repository
+  block:
+  - name: K8s PreReq | Kubernetes repository | Download Kubernetes ASC file for the keyring
+    ansible.builtin.get_url:
+      url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+      dest: '{{ tempfile.path }}'
+      checksum: sha256:{{ checksums.kubernetes }}
+
+  - name: K8s PreReq | Kubernetes repository | De-armor Docker GPG key
+    ansible.builtin.shell: gpg --dearmor < {{ tempfile.path }} > /etc/apt/keyrings/kubernetes.gpg
+    changed_when: false
+    no_log: true
+
+  - name: K8s PreReq | Kubernetes repository | Add Kubernetes repository to APT sources list
+    ansible.builtin.apt_repository:
+      repo: >
+        deb [arch={{ ansible_architecture }}
+        signed-by=/etc/apt/keyrings/kubernetes.gpg]
+        https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/
+        /
+      state: present
+  when: tempfile.path is defined
+
 - name: K8s PreReq | Install required packages
   ansible.builtin.apt:
-    name:
-      - curl
-      - apt-transport-https
-      - git
-      - wget
-      - software-properties-common
-      - lsb-release
-      - ca-certificates
-      - socat
+    name: '{{ item }}'
     state: present
+    update_cache: yes
+  loop:
+    - '{{ packages.generic }}'
+    - '{{ packages.containerd }}'
+    - '{{ packages.kubernetes }}'
   register: reg_apt_install
   until: reg_apt_install is succeeded
   retries: 5
   delay: 30
+
+- name: K8s PreReq | Mark K8s packages to prevent upgrades
+  ansible.builtin.dpkg_selections:
+    name: '{{ item }}'
+    selection: hold
+  loop: '{{ packages.kubernetes }}'
+
+- name: K8s PreReq | Containerd
+  block:
+  - name: K8s PreReq | Containerd | Create default Containerd config
+    ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+
+  - name: K8s PreReq | Containerd | Set SystemdCgroup to true for Containerd
+    ansible.builtin.replace:
+      path: /etc/containerd/config.toml
+      regexp: '^(\s*SystemdCgroup\s*=\s*)false(\s*)$'
+      replace: '\1true\2'
+
+  - name: K8s PreReq | Containerd | Enable and restart Containerd service
+    ansible.builtin.systemd_service:
+      name: containerd
+      enabled: true
+      state: restarted
 
 - name: K8s PreReq | Disable and stop UFW firewall service
   ansible.builtin.systemd_service:
@@ -33,15 +111,13 @@
     group: root
     mode: '0644'
 
-- name: K8s PreReq | Load kernel modules for K8s | overlay
+- name: K8s PreReq | Load kernel modules for K8s
   community.general.modprobe:
-    name: overlay
+    name: '{{ item }}'
     state: present
-
-- name: K8s PreReq | Load kernel modules for K8s | br_netfilter
-  community.general.modprobe:
-    name: br_netfilter
-    state: present
+  loop:
+    - overlay
+    - br_netfilter
 
 - name: K8s PreReq | Copy kernel parameters configuration file
   ansible.builtin.template:
@@ -60,84 +136,3 @@
      reload: yes
      sysctl_file: /etc/sysctl.d/10-kubernetes.conf
   with_dict: '{{ sysctl_config }}'
-
-- name: K8s PreReq | Ensure APT keyrings directory exists
-  ansible.builtin.file:
-    name: /etc/apt/keyrings
-    state: directory
-    mode: '0755'
-
-- name: K8s PreReq | Download Docker GPG file for the keyring
-  ansible.builtin.get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /tmp/docker.asc
-    checksum: sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
-
-- name: K8s PreReq | De-armor Docker GPG key
-  ansible.builtin.shell: gpg --dearmor < /tmp/docker.asc > /etc/apt/keyrings/docker.gpg
-  changed_when: false
-  no_log: true
-
-- name: K8s PreReq | Add Docker's repository to APT sources list
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
-    state: present
-
-- name: K8s PreReq | Install Containerd
-  ansible.builtin.apt:
-    name: containerd.io
-    state: present
-    update_cache: yes
-
-- name: K8s PreReq | Create default Containerd config
-  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
-
-- name: K8s PreReq | Set SystemdCgroup to true for Containerd
-  ansible.builtin.replace:
-    path: /etc/containerd/config.toml
-    regexp: '^(\s*SystemdCgroup\s*=\s*)false(\s*)$'
-    replace: '\1true\2'
-
-- name: K8s PreReq | Enable and restart Containerd service
-  ansible.builtin.systemd_service:
-    name: containerd
-    enabled: true
-    state: restarted
-
-# # TODO move tasks related to Kubernetes installation to the beginning,
-# #      to aggregate APT installation process into a single task
-- name: K8s PreReq | Download Kubernetes ASC file for the keyring
-  ansible.builtin.get_url:
-    url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
-    dest: /tmp/kubernetes.asc
-    checksum: sha256:7627818cf7bae52f9008c93e8b1f961f53dea11d40891778de216fb1b43be54d
-
-- name: K8s PreReq | De-armor Docker GPG key
-  ansible.builtin.shell: gpg --dearmor < /tmp/kubernetes.asc > /etc/apt/keyrings/kubernetes.gpg
-  changed_when: false
-  no_log: true
-
-- name: K8s PreReq | Add Kubernetes repository to APT sources list
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
-    state: present
-
-- # TODO create list of packages as a variable
-- name: K8s PreReq | Install K8s packages
-  ansible.builtin.apt:
-    name:
-      - kubelet
-      - kubeadm
-      - kubectl
-    state: present
-    update_cache: yes
-
-# TODO create list of packages as a variable
-- name: K8s PreReq | Mark K8s packages to prevent upgrades
-  ansible.builtin.dpkg_selections:
-    name: '{{ item }}'
-    selection: hold
-  loop:
-    - kubelet
-    - kubeadm
-    - kubectl
