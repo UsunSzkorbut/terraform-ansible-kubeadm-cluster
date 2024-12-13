@@ -1,5 +1,31 @@
 ---
-# defaults file for k8s-kubeadm-init
+# defaults file for k8s-kubeadm-prereq
+
+# file checksums
+checksums:
+  docker: 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
+  kubernetes: 7627818cf7bae52f9008c93e8b1f961f53dea11d40891778de216fb1b43be54d
+
+# Kubernetes release version
+k8s_version: v1.31
+
+# APT packages
+packages:
+  generic:
+    - curl
+    - apt-transport-https
+    - git
+    - wget
+    - software-properties-common
+    - lsb-release
+    - ca-certificates
+    - socat
+  containerd:
+    - containerd.io
+  kubernetes:
+    - kubelet
+    - kubeadm
+    - kubectl
 
 # sysctl configuration
 sysctl_config:
@@ -8,5 +34,3 @@ sysctl_config:
   net.ipv4.conf.all.rp_filter: 0
   net.bridge.bridge-nf-call-iptables: 1
   net.bridge.bridge-nf-call-ip6tables: 1
-  
-  
