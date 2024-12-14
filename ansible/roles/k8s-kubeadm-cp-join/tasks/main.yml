@@ -3,7 +3,7 @@
   ansible.builtin.shell: kubeadm token create --print-join-command
   register: join_command
   no_log: true
-  when: inventory_hostname in groups['control'][0]
+  when: inventory_hostname in groups['initial']
 
 - name: Kubeadm Control Plane Node | Setting facts so that they will be persisted in the fact cache
   ansible.builtin.set_fact:
@@ -11,8 +11,8 @@
     cacheable: true
   delegate_to: localhost
   delegate_facts: true
-  when: inventory_hostname in groups['control'][0]
+  when: inventory_hostname in groups['initial']
 
 - name: Kubeadm Control Plane Node | Join control plane nodes to initial control plane
   ansible.builtin.shell: "{{ hostvars['localhost'].join_cmd }}"
-  when: inventory_hostname in groups['control'][1:]
+  when: inventory_hostname in groups['regular']
