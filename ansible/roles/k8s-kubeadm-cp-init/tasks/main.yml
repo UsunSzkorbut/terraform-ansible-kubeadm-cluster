@@ -1,4 +1,10 @@
 ---
+- name: Cluster first init | Create temporary file for Helm installation script
+  ansible.builtin.tempfile:
+    state: file
+    suffix: get_helm_3
+  register: get_helm_3
+
 - name: Cluster first init | K8s Kubeadm Control Plane pull images
   ansible.builtin.shell: kubeadm config images pull
   args:
@@ -14,55 +20,65 @@
 
 - name: Cluster first init | Create Kube directory
   ansible.builtin.file:
-    path: ~/.kube
+    path: '{{ ansible_env.HOME }}/.kube'
     state: directory
 
 - name: Cluster first init | Copy admin.conf to Kube directory
   ansible.builtin.copy:
     src: /etc/kubernetes/admin.conf
-    dest: ~/.kube/config
+    dest: '{{ ansible_env.HOME }}/.kube/config'
     remote_src: true
     owner: root
     group: root
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 
-- name: Cluster first init | Add kubectl completion in ~/.bashrc
-  ansible.builtin.lineinfile:
-    path: ~/.bashrc
-    line: 'source <(kubectl completion bash) && source /etc/bash_completion'
-    state: present
+# TODO simplify if possible
+- name: Cluster first init | Kubectl completion
+  block:
+  - name: Cluster first init | Kubectl completion | Add kubectl completion in {{ ansible_env.HOME }}/.bashrc
+    ansible.builtin.lineinfile:
+      path: '{{ ansible_env.HOME }}/.bashrc'
+      line: 'source <(kubectl completion bash) && source /etc/bash_completion'
+      state: present
 
-- name: Cluster first init | Source ~/.bashrc file
-  ansible.builtin.shell: bash -c "source /root/.bashrc"
+  - name: Cluster first init | Kubectl completion | Source {{ ansible_env.HOME }}/.bashrc file
+    ansible.builtin.shell: bash -c "source {{ ansible_env.HOME }}/.bashrc"
 
-- name: Cluster first init | Download Helm installation script
-  ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
-    dest: /tmp/get-helm-3
-    mode: '0755'
+- name: Cluster first init | Helm install
+  block:
+  - name: Cluster first init | Helm install | Download Helm installation script
+    ansible.builtin.get_url:
+      url: https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+      dest: '{{ get_helm_3.path }}'
+      mode: '0755'
 
-- name: Cluster first init | Run Helm installation script
-  ansible.builtin.shell: /tmp/get-helm-3
-  args:
-    creates: /usr/local/bin/helm
-  register: reg_helm_install
+  # TODO installation error handling
+  #      registers?
+  - name: Cluster first init | Helm install | Run Helm installation script
+    ansible.builtin.shell: '{{ get_helm_3.path }}'
+    args:
+      creates: /usr/local/bin/helm
+    register: reg_helm_install
 
-- name: Cluster first init | Add /usr/local/bin to PATH for Helm
-  ansible.builtin.lineinfile:
-    path: ~/.bashrc
-    line: 'export PATH=$PATH:/usr/local/bin'
-  when: reg_helm_install.rc == 0
+  - name: Cluster first init | Helm install | Add /usr/local/bin to PATH for Helm
+    ansible.builtin.lineinfile:
+      path: '{{ ansible_env.HOME }}/.bashrc'
+      line: 'export PATH=$PATH:/usr/local/bin'
+    when: reg_helm_install.rc == 0
+  when: get_helm_3.path is defined
 
-- name: Cluster first init | Add Cilium Helm repository
-  kubernetes.core.helm_repository:
-    name: cilium
-    repo_url: https://helm.cilium.io/
+- name: Cluster first init | Install CNI Cilium via Helm
+  block:
+  - name: Cluster first init | Install CNI Cilium via Helm | Add Cilium Helm repository
+    kubernetes.core.helm_repository:
+      name: cilium
+      repo_url: https://helm.cilium.io/
 
-- name: Cluster first init | Install CNI plugin (Cilium)
-  kubernetes.core.helm:
-    name: cilium
-    chart_ref: cilium/cilium
-    chart_version: 1.16.4
-    release_namespace: kube-system
-    release_state: present
+  - name: Cluster first init | Install CNI Cilium via Helm | Install CNI plugin (Cilium)
+    kubernetes.core.helm:
+      name: cilium
+      chart_ref: cilium/cilium
+      chart_version: 1.16.4
+      release_namespace: kube-system
+      release_state: present
