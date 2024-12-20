@@ -26,6 +26,14 @@ resource "proxmox_vm_qemu" "kubeadm-master" {
                   size = 100
                 }
             }
+            scsi1 {
+                disk {
+                  storage = "local-lvm"
+                  emulatessd = true
+                  size = 50
+                  format = "raw"
+                }
+            }
         }
         ide {
             ide3 {
@@ -69,6 +77,14 @@ resource "proxmox_vm_qemu" "kubeadm-worker" {
                   storage = "local-lvm"
                   emulatessd = true
                   size = 100
+                }
+            }
+            scsi1 {
+                disk {
+                  storage = "local-lvm"
+                  emulatessd = true
+                  size = 50
+                  format = "raw"
                 }
             }
         }
